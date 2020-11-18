@@ -151,25 +151,15 @@ int main()
 
     vector<pthread_t> serverThreads(2), clientThreads(5);
 
-    // pthread_t ptid1, ptid2, ptid3, ptid4;
-
-    // int id = server->id;
-    // pthread_create(&ptid1, NULL, switchFunc, &id);
-    // idToSwitch[id] = server;
-
     for (int i = 0; i < serversList.size(); i++)
         pthread_create(&serverThreads[i], NULL, serverFunc, serversList[i]);
+
     for (int i = 0; i < clientsList.size(); i++)
         pthread_create(&clientThreads[i], NULL, clientFunc, clientsList[i]);
+
     for (int i = 0; i < serversList.size(); i++)
         pthread_join(serverThreads[i], NULL);
+
     for (int i = 0; i < clientThreads.size(); i++)
         pthread_join(clientThreads[i], NULL);
-    // for (int i = 0; i < clientsList.size(); i++)
-    //     clientThreads.push_back(thread(clientFunc, clientsList[i]));
-
-    // for (auto &th : serverThreads)
-    //     th.join();
-    // for (auto &th : clientThreads)
-    //     th.join();
 }
