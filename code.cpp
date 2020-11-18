@@ -1,3 +1,10 @@
+//TODO
+// 1. Make / add print of dhcp message format
+// 2. figure of sending of messages to clients while broadcast
+// 3. add feature of lease extension
+// 4. add feature of Ip address decline
+// 5. add feature of server nack
+
 #include <bits/stdc++.h>
 #include <thread>
 #include <unistd.h>
