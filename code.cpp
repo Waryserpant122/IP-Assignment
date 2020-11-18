@@ -70,8 +70,8 @@ public:
     int clientId;
     string nodeName;
     vector<DHCPMessage *> messagesBuffer;
-    string macAddress, ipAddress;
-    int leaseTimeLeft;
+    string macAddress, ipAddress = "";
+    int leaseTimeLeft; //in hours
 
     // boolean value to determine whether the client node is new or needs
     // a new Ipaddress after the lease time is expired
@@ -99,6 +99,77 @@ public:
     }
 };
 
+vector<serverNode *> serversList;
+vector<clientNode *> clientsList;
+int lck = 0;
+void *serverFunc(void *args)
+{
+    pthread_detach(pthread_self());
+    serverNode *server = (serverNode *)args;
+    cout << server->nodeName << endl;
+    pthread_exit(NULL);
+}
+
+void *clientFunc(void *args)
+{
+    clientNode *client = (clientNode *)args;
+    while (1)
+    {
+        if (client->needsIpAddress == 1)
+        {
+            usleep(10000);
+            cout << "Client " << client->clientId << " needs a new Ip address\n";
+            client->needsIpAddress = 0;
+            break;
+        }
+    }
+    pthread_exit(NULL);
+}
+
 int main()
 {
+    serverNode *server1 = new serverNode("server1", "0a:2C:11:23:cf:03", "193.197.21.4");
+    serverNode *server2 = new serverNode("server2", "3a:1f:23:18:cc:01", "193.197.21.5");
+
+    //client 1 2 and 3 are already exsiting
+    // client 4 and 5 are newly inducted in the system
+    clientNode *client1 = new clientNode("client1", "1b:43:21:65:77:fa", "193.194.22.7", 24);
+    clientNode *client2 = new clientNode("client2", "65:77:fa:1b:43:21", "193.194.25.41", 1224);
+    clientNode *client3 = new clientNode("client3", "1b:77:fa:43:21:65", "193.194.23.42", 144);
+
+    clientNode *client4 = new clientNode("client4", "3a:1f:01:23:18:cc");
+    clientNode *client5 = new clientNode("client5", "23:18:4d:22:1d:cc");
+
+    serversList.push_back(server1);
+    serversList.push_back(server2);
+
+    clientsList.push_back(client1);
+    clientsList.push_back(client2);
+    clientsList.push_back(client3);
+    clientsList.push_back(client4);
+    clientsList.push_back(client5);
+
+    vector<pthread_t> serverThreads(2), clientThreads(5);
+
+    // pthread_t ptid1, ptid2, ptid3, ptid4;
+
+    // int id = server->id;
+    // pthread_create(&ptid1, NULL, switchFunc, &id);
+    // idToSwitch[id] = server;
+
+    for (int i = 0; i < serversList.size(); i++)
+        pthread_create(&serverThreads[i], NULL, serverFunc, serversList[i]);
+    for (int i = 0; i < clientsList.size(); i++)
+        pthread_create(&clientThreads[i], NULL, clientFunc, clientsList[i]);
+    for (int i = 0; i < serversList.size(); i++)
+        pthread_join(serverThreads[i], NULL);
+    for (int i = 0; i < clientThreads.size(); i++)
+        pthread_join(clientThreads[i], NULL);
+    // for (int i = 0; i < clientsList.size(); i++)
+    //     clientThreads.push_back(thread(clientFunc, clientsList[i]));
+
+    // for (auto &th : serverThreads)
+    //     th.join();
+    // for (auto &th : clientThreads)
+    //     th.join();
 }
