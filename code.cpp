@@ -11,7 +11,7 @@ struct options
     string messageType;                    //DHCPDISCOVER , DHCPOFFER etc
     string clientId = "0", serverId = "0"; // clientId will be assigned as its mac address here to identify it.
     string resquestedIpAddress;
-    int ipLeaseTime, renewalTime, rebindingTime; //renewaltime = T1 , rebindingtime = T2;
+    int ipLeaseTime = 0, renewalTime = 0, rebindingTime = 0; //renewaltime = T1 , rebindingtime = T2;
 };
 
 class DHCPMessage
@@ -21,7 +21,7 @@ public:
     // Ip address coloumn present in the message
     // Here we assume there is no gateway/relay present and we have our own subnet;
     int opcode, transcationId, secs;
-    string clientIpAddr, yourIpAddr, serverIpAddr, clientMacAddress;
+    string clientIpAddr = "0.0.0.0", yourIpAddr = "0.0.0.0", serverIpAddr = "192.168.0.1", clientMacAddress;
     options *opt = new options;
 
     DHCPMessage(int opcode, int transId, string messageType)
@@ -43,9 +43,9 @@ class serverNode
 public:
     int serverId;
     string nodeName;
-    vector<DHCPMessage *> messagesBuffer;
     string macAddress, ipAddress;
-
+    vector<DHCPMessage *> sendMessageBuffer;
+    vector<DHCPMessage *> recieveMessageBuffer;
     //A vector to store all thr Ip addresses available with the server
     vector<string> addressPool;
 
@@ -69,7 +69,8 @@ class clientNode
 public:
     int clientId;
     string nodeName;
-    vector<DHCPMessage *> messagesBuffer;
+    list<DHCPMessage *> sendMessageBuffer;
+    list<DHCPMessage *> recieveMessageBuffer;
     string macAddress, ipAddress = "";
     int leaseTimeLeft; //in hours
 
@@ -115,12 +116,29 @@ void *clientFunc(void *args)
     clientNode *client = (clientNode *)args;
     while (1)
     {
-        if (client->needsIpAddress == 1)
+        if (client->recieveMessageBuffer.size() > 0)
         {
-            usleep(10000);
-            cout << "Client " << client->clientId << " needs a new Ip address\n";
-            client->needsIpAddress = 0;
-            break;
+            DHCPMessage *mess = client->sendMessageBuffer.front();
+            if (mess->opcode == 1)
+                client->sendMessageBuffer.pop_front();
+        }
+        if (client->sendMessageBuffer.size() > 0)
+        {
+            DHCPMessage *sendMess = client->sendMessageBuffer.front();
+            client->sendMessageBuffer.pop_front();
+            if (sendMess->opt->messageType == "DHCPOFFER")
+            {
+                for (int i = 0; i < serversList.size(); i++)
+                    serversList[i]->recieveMessageBuffer.push_back(sendMess);
+                for (int i = 0; i < clientsList.size(); i++)
+                {
+                    if (clientsList[i]->clientId != client->clientId)
+                        clientsList[i]->recieveMessageBuffer.push_back(sendMess);
+                }
+                this_thread::sleep_for(chrono::milliseconds(100));
+                cout << "Broadcasted a DHCPOFFER messages to all members in the network\n";
+                //printDHCPMessage()
+            }
         }
     }
     pthread_exit(NULL);
@@ -136,9 +154,13 @@ int main()
     clientNode *client1 = new clientNode("client1", "1b:43:21:65:77:fa", "193.194.22.7", 24);
     clientNode *client2 = new clientNode("client2", "65:77:fa:1b:43:21", "193.194.25.41", 1224);
     clientNode *client3 = new clientNode("client3", "1b:77:fa:43:21:65", "193.194.23.42", 144);
-
     clientNode *client4 = new clientNode("client4", "3a:1f:01:23:18:cc");
     clientNode *client5 = new clientNode("client5", "23:18:4d:22:1d:cc");
+
+    DHCPMessage *mess = new DHCPMessage(1, 100, "DHCPDISCOVER");
+    mess->clientMacAddress = client4->macAddress;
+    mess->opt->clientId = client4->clientId;
+    client4->sendMessageBuffer.push_back(mess);
 
     serversList.push_back(server1);
     serversList.push_back(server2);
