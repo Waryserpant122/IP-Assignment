@@ -87,10 +87,9 @@ public:
   list<DHCPMessage *> recieveMessageBuffer;
   string macAddress, ipAddress = "";
   int leaseTimeLeft; //in hours
-  bool dhcpOffer;
   // boolean value to determine whether the client node is new or needs
   // a new Ipaddress after the lease time is expired
-  bool needsIpAddress;
+  bool needsIpAddress, needsRenewal = 0;
 
   //Initalizing the client Node which is already existing in the subnet
   // and has a Ip address assigned to it.
@@ -153,7 +152,7 @@ void printDHCPMessage(DHCPMessage *mess)
   {
     cout << "|      Leased Ip Address  |  Lease time in hrs    |\n";
     cout << "| ----------------------------------------------- |\n";
-    cout << "|     " << mess->opt->resquestedIpAddress << "    |      " << mess->opt->ipLeaseTime << "          |\n";
+    cout << "|      " << mess->opt->resquestedIpAddress << "      |        " << mess->opt->ipLeaseTime << "            |\n";
     cout << "| ----------------------------------------------- |\n";
   }
   cout << "\n";
@@ -162,17 +161,18 @@ void printDHCPMessage(DHCPMessage *mess)
 
 void *serverFunc(void *args)
 {
-  //pthread_detach(pthread_self());
+  pthread_detach(pthread_self());
   //this_thread::sleep_for(chrono::microseconds(100));
   serverNode *server = (serverNode *)args;
-
+  if (server->serverId == 2)
+    this_thread::sleep_for(chrono::microseconds(700));
   while (1)
   {
     DHCPMessage *recvMess, *message1, *message2, *ackMessage;
     if (server->recieveMessageBuffer.size() > 0)
     {
-      if (server->serverId == 2)
-        this_thread::sleep_for(chrono::microseconds(10));
+      // if (server->serverId == 2)
+      //   this_thread::sleep_for(chrono::microseconds(50));
       DHCPMessage *recvMesstemp;
       recvMesstemp = server->recieveMessageBuffer.front();
       server->recieveMessageBuffer.pop_front();
@@ -184,26 +184,28 @@ void *serverFunc(void *args)
       if (req == "DHCPDISCOVER")
       {
 
-        cout << "\nAt server " << server->serverId << " recieved a DHCP " << req << " request\n\n";
-        // this_thread::sleep_for(chrono::milliseconds(2));
         string toAssignIp = server->addressPool.back();
-        DHCPMessage *replyOffer = new DHCPMessage(recvMesstemp->opcode, recvMesstemp->transcationId + 1, "DHCPOFFER");
+        DHCPMessage *replyOffer = copyMessage(recvMesstemp);
+        replyOffer->opcode = 2;
+        replyOffer->transcationId++;
         replyOffer->yourIpAddr = toAssignIp;
         replyOffer->serverIpAddr = server->ipAddress;
-        replyOffer->clientIpAddr = recvMesstemp->clientIpAddr;
-        replyOffer->opt->clientId = recvMesstemp->opt->clientId;
         replyOffer->opt->resquestedIpAddress = toAssignIp;
         replyOffer->opt->serverId = server->serverId;
-        replyOffer->opt->ipLeaseTime = 72;
+        replyOffer->opt->messageType = "DHCPOFFER";
+        replyOffer->opt->ipLeaseTime = rand() % 100;
         free(recvMesstemp);
-        cout << "DHCPOFFER sent by server " << server->serverId << endl;
+        this_thread::sleep_for(chrono::microseconds(10));
+        cout << "\nAt server " << server->serverId << " recieved a DHCP " << req << " request\n\n";
+        cout << "DHCPOFFER sent by server " << server->serverId << " \nmessage type " << replyOffer->opt->messageType << endl;
+        printDHCPMessage(replyOffer);
+        this_thread::sleep_for(chrono::microseconds(10));
         for (int i = 0; i < clientsList.size(); i++)
         {
-          clientsList[i]->recieveMessageBuffer.push_back(replyOffer);
+          clientsList[i]->recieveMessageBuffer.push_back(copyMessage(replyOffer));
         }
-        printDHCPMessage(replyOffer);
         free(replyOffer);
-        this_thread::sleep_for(chrono::microseconds(10));
+        this_thread::sleep_for(chrono::microseconds(20));
         while (server->recieveMessageBuffer.size() == 0)
           ;
         if (server->recieveMessageBuffer.size() > 0)
@@ -227,17 +229,29 @@ void *serverFunc(void *args)
               cout << "\nSending ACK from server " << server->serverId << " to the client ";
               cout << message1->opt->clientId << " \n";
               cout << "WIth Ip-address of " << toSendIp << endl;
-              ackMessage = message1;
+              ackMessage = copyMessage(message1);
               ackMessage->opt->resquestedIpAddress = toSendIp;
               ackMessage->opcode = 2;
               ackMessage->opt->messageType = "DHCPACK";
               ackMessage->clientIpAddr = ackMessage->opt->resquestedIpAddress;
+              ackMessage->serverIpAddr = server->serverId;
               ackMessage->yourIpAddr = ackMessage->opt->resquestedIpAddress;
-
+              printDHCPMessage(ackMessage);
               for (int i = 0; i < clientsList.size(); i++)
-                clientsList[i]->recieveMessageBuffer.push_back(ackMessage);
+                clientsList[i]->recieveMessageBuffer.push_back(copyMessage(ackMessage));
+
+              //Remove the Ip from the address pool
+              server->addressPool.pop_back();
+              hostIp *addTemp = new hostIp();
+              addTemp->clientId = ackMessage->opt->clientId;
+              addTemp->ipAddress = ackMessage->yourIpAddr;
+              addTemp->leaseTime = ackMessage->opt->ipLeaseTime;
+              server->hostIpList.push_back(addTemp);
+              cout << "\nClient " << ackMessage->opt->clientId << " Added to the address book of ";
+              cout << "Server " << server->serverId << " with Ip addresss " << addTemp->ipAddress;
+              cout << " and Lease Time " << addTemp->leaseTime << " hours\n\n";
+              free(addTemp);
               this_thread::sleep_for(chrono::microseconds(200));
-              //Grant by ack
             }
             else if (message1->opt->messageType == "DHCPDECLINE")
             {
@@ -257,13 +271,13 @@ void *clientFunc(void *args)
   clientNode *client = (clientNode *)args;
   while (1)
   {
-    while (client->recieveMessageBuffer.size() > 0)
+    if (client->recieveMessageBuffer.size() > 0)
     {
-      // DHCPMessage *mess = client->recieveMessageBuffer.front();
-      // if (mess->opcode == 1)
-      client->recieveMessageBuffer.pop_front();
-      // if (mess->opt->clientId != client->clientId)
-      //    client->recieveMessageBuffer.pop_front();
+      DHCPMessage *t = client->recieveMessageBuffer.front();
+      if (t->opt->clientId != client->clientId)
+        client->recieveMessageBuffer.pop_front();
+      // if (client->needsIpAddress == 0)
+      //   client->recieveMessageBuffer.pop_front();
     }
     if (client->sendMessageBuffer.size() > 0)
     {
@@ -271,22 +285,32 @@ void *clientFunc(void *args)
       client->sendMessageBuffer.pop_front();
       if (sendMess->opt->messageType == "DHCPDISCOVER")
       {
-        for (int i = 0; i < serversList.size(); i++)
-          serversList[i]->recieveMessageBuffer.push_back(sendMess);
+        cout << "\nClient " << client->clientId << " needs a new IP address\n";
         cout << "Broadcasted a DHCPDISCOVER messages to all members in the network\n";
         printDHCPMessage(sendMess);
-        this_thread::sleep_for(chrono::microseconds(100));
-
+        for (int i = 0; i < serversList.size(); i++)
+        {
+          DHCPMessage *temp = copyMessage(sendMess);
+          serversList[i]->recieveMessageBuffer.push_back(temp);
+        }
+        for (int i = 0; i < clientsList.size(); i++)
+        {
+          if (clientsList[i]->clientId != client->clientId)
+            clientsList[i]->recieveMessageBuffer.push_back(copyMessage(sendMess));
+        }
+        this_thread::sleep_for(chrono::microseconds(20));
         while (client->recieveMessageBuffer.size() != 2)
+        {
+          //cout << "watihere\n";
           this_thread::sleep_for(chrono::microseconds(50));
-
-        message1 = client->recieveMessageBuffer.front();
+        }
+        DHCPMessage *tempMess = client->recieveMessageBuffer.front();
+        message1 = copyMessage(tempMess);
         client->recieveMessageBuffer.pop_front();
         if (message1->opt->clientId == client->clientId && message1->opt->messageType == "DHCPOFFER")
         {
 
           int recvServer = message1->opt->serverId;
-          client->dhcpOffer = 0;
           string recvIp = message1->opt->resquestedIpAddress;
           cout << "DHCPOFFER recieved from " << message1->opt->serverId;
           cout << " With Ip Address " << recvIp;
@@ -300,11 +324,11 @@ void *clientFunc(void *args)
           {
             DHCPMessage *temp = client->recieveMessageBuffer.front();
             client->recieveMessageBuffer.pop_front();
-            cout << "DHCP offer recieved from " << temp->opt->serverId << " has to be discarded\n";
+            cout << "DHCP offer recieved from " << temp->opt->serverId << " is late and has been discarded\n";
           }
           client->recieveMessageBuffer.clear();
           this_thread::sleep_for(chrono::microseconds(20));
-          //Check wheteher Ip is valid or not (ARP used)
+          //Check wheteher Ip is valid or not (ARP used in bg)
           bool isValidAddress = 1;
           for (int i = 0; i < clientsList.size(); i++)
           {
@@ -320,27 +344,29 @@ void *clientFunc(void *args)
           if (isValidAddress)
           {
             //Sending DHCP Request
-            DHCPMessage *sendRequest = message1;
+            DHCPMessage *sendRequest = copyMessage(message1);
             sendRequest->opcode = 1;
+            sendRequest->transcationId++;
             sendRequest->opt->serverId = recvServer;
             sendRequest->opt->messageType = "DHCPREQUEST";
             // print DHCP message
             cout << " \nDHCP MESSAGE OF REQUEST sent by Client " << client->clientId;
             cout << "\nIntended for Server " << sendRequest->opt->serverId << endl;
+            printDHCPMessage(sendRequest);
             for (int i = 0; i < serversList.size(); i++)
-              serversList[i]->recieveMessageBuffer.push_back(sendRequest);
+              serversList[i]->recieveMessageBuffer.push_back(copyMessage(sendRequest));
 
             this_thread::sleep_for(chrono::microseconds(10));
-            // for (int i = 0; i < clientsList.size(); i++)
-            // {
-            //    if (clientsList[i]->clientId != client->clientId)
-            //       clientsList[i]->recieveMessageBuffer.push_back(sendRequest);
-            // }
+            for (int i = 0; i < clientsList.size(); i++)
+            {
+              if (clientsList[i]->clientId != client->clientId)
+                clientsList[i]->recieveMessageBuffer.push_back(copyMessage(sendRequest));
+            }
             while (client->recieveMessageBuffer.size() == 0)
               ;
             while (client->recieveMessageBuffer.size() > 0)
             {
-              message1 = client->recieveMessageBuffer.front();
+              message1 = copyMessage(client->recieveMessageBuffer.front());
               client->recieveMessageBuffer.pop_front();
               while (message1->opt->serverId != recvServer && client->recieveMessageBuffer.size() > 0)
               {
@@ -356,6 +382,20 @@ void *clientFunc(void *args)
                 client->ipAddress = message1->opt->resquestedIpAddress;
                 client->leaseTimeLeft = message1->opt->ipLeaseTime;
                 client->needsIpAddress = 0;
+
+                this_thread::sleep_for(chrono::milliseconds(100));
+
+                if (clientsList[4]->needsIpAddress == 1)
+                {
+                  // for (auto i : clientsList)
+                  //   i->recieveMessageBuffer.clear();
+                  clientsList[4]->needsIpAddress = 0;
+                  clientNode *client4 = clientsList[4];
+                  DHCPMessage *mess = new DHCPMessage(1, 200, "DHCPDISCOVER");
+                  mess->clientMacAddress = client4->macAddress;
+                  mess->opt->clientId = client4->clientId;
+                  client4->sendMessageBuffer.push_back(mess);
+                }
               }
               else
               {
