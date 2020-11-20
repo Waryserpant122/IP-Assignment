@@ -166,8 +166,11 @@ void printDHCPMessage(DHCPMessage *mess)
       cout << "|      " << mess->opt->resquestedIpAddress << "      |        " << mess->opt->ipLeaseTime << "            |\n";
       cout << "| ----------------------------------------------- |\n";
    }
-   cout << "\n";
-   cout << "\n---------------------------------------------------------------------\n";
+   // cout << "| ----------------------------------------------- |\n";
+   cout << "|               Client Mac Address                |\n";
+   cout << "| ----------------------------------------------- |\n";
+   cout << "|               " << mess->clientMacAddress << "                 |\n";
+   cout << "| ----------------------------------------------- |\n\n";
 }
 
 bool isthere(serverNode *server, int clid)
