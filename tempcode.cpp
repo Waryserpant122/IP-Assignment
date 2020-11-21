@@ -275,9 +275,10 @@ void *serverFunc(void *args)
                 replyOffer->opt->ipLeaseTime = rand() % 100;
                 free(recvMesstemp);
                 this_thread::sleep_for(chrono::microseconds(30));
-
                 cout << "\nAt server " << server->serverId << " recieved a DHCP " << req << " request\n\n";
                 cout << "DHCPOFFER sent by server " << server->serverId << " \nmessage type " << replyOffer->opt->messageType << "\n\n";
+                int sleepTime = 20 * server->serverId;
+                this_thread::sleep_for(chrono::microseconds(sleepTime));
                 printDHCPMessage(replyOffer);
                 this_thread::sleep_for(chrono::microseconds(10));
                 for (int i = 0; i < clientsList.size(); i++)
@@ -334,31 +335,49 @@ void *serverFunc(void *args)
                 }
             }
             // add function to search client in host ip list
-            if (req == "DHCPREQUEST" && isthere(server, recvMesstemp->opt->clientId))
+            if (req == "DHCPREQUEST")
             {
-                //do renewal of ip address
-                DHCPMessage *message1 = copyMessage(recvMesstemp);
-                cout << "\nDHCP Request given to " << server->nodeName;
-                cout << " by Client " << message1->opt->clientId;
-                cout << " for renewal \nSending ACK from Server " << server->serverId << " to the client ";
-                cout << message1->opt->clientId << " \n";
-                cout << "WIth Ip-address of " << message1->opt->resquestedIpAddress << endl;
-                ackMessage = copyMessage(message1);
-                ackMessage->opt->resquestedIpAddress = message1->opt->resquestedIpAddress;
-                ackMessage->transcationId++;
-                ackMessage->opcode = 2;
-                ackMessage->opt->serverId = server->serverId;
-                ackMessage->opt->messageType = "DHCPACK";
-                ackMessage->clientIpAddr = ackMessage->opt->resquestedIpAddress;
-                ackMessage->serverIpAddr = server->ipAddress;
-                ackMessage->yourIpAddr = ackMessage->opt->resquestedIpAddress;
-                srand(time(NULL));
-                int leaseExtendedTime = rand() % 100;
-                ackMessage->opt->ipLeaseTime = leaseExtendedTime;
-                printDHCPMessage(ackMessage);
-                this_thread::sleep_for(chrono::microseconds(10));
-                for (int i = 0; i < clientsList.size(); i++)
-                    clientsList[i]->recieveMessageBuffer.push_back(copyMessage(ackMessage));
+                if (isthere(server, recvMesstemp->opt->clientId))
+                {
+                    //do renewal of ip address
+                    this_thread::sleep_for(chrono::microseconds(30));
+                    DHCPMessage *message1 = copyMessage(recvMesstemp);
+                    cout << "\nDHCP Request given to " << server->nodeName;
+                    cout << " by Client " << message1->opt->clientId;
+                    cout << " for renewal \nSending ACK from Server " << server->serverId << " to the client ";
+                    cout << message1->opt->clientId << " \n";
+                    cout << "WIth Ip-address of " << message1->opt->resquestedIpAddress << endl;
+                    ackMessage = copyMessage(message1);
+                    ackMessage->opt->resquestedIpAddress = message1->opt->resquestedIpAddress;
+                    ackMessage->transcationId++;
+                    ackMessage->opcode = 2;
+                    ackMessage->opt->serverId = server->serverId;
+                    ackMessage->opt->messageType = "DHCPACK";
+                    ackMessage->clientIpAddr = ackMessage->opt->resquestedIpAddress;
+                    ackMessage->serverIpAddr = server->ipAddress;
+                    ackMessage->yourIpAddr = ackMessage->opt->resquestedIpAddress;
+                    srand(time(NULL));
+                    int leaseExtendedTime = rand() % 100;
+                    ackMessage->opt->ipLeaseTime = leaseExtendedTime;
+                    this_thread::sleep_for(chrono::microseconds(20));
+                    printDHCPMessage(ackMessage);
+                    this_thread::sleep_for(chrono::microseconds(10));
+                    for (int i = 0; i < clientsList.size(); i++)
+                        clientsList[i]->recieveMessageBuffer.push_back(copyMessage(ackMessage));
+                }
+                else
+                {
+                    // Client not present in server book
+                    //print that
+                    if (server->serverId == 3)
+                        this_thread::sleep_for(chrono::microseconds(5));
+                    cout << "\nMessage sent to Server " << server->serverId;
+                    cout << " By client " << recvMesstemp->opt->clientId << " is discarded as ";
+                    cout << " the client's IP address is not there in the Address table of ";
+                    cout << "Server " << server->serverId;
+                    cout << "\n\n";
+                    //this_thread::sleep_for(chrono::microseconds10));
+                }
             }
         }
     }
@@ -388,7 +407,7 @@ void *clientFunc(void *args)
                 printDHCPMessage(sendMess);
                 this_thread::sleep_for(chrono::microseconds(10));
                 broadcastMessage(sendMess, client);
-                this_thread::sleep_for(chrono::microseconds(120));
+                this_thread::sleep_for(chrono::microseconds(150));
 
                 while (client->recieveMessageBuffer.size() != 2)
                     this_thread::sleep_for(chrono::microseconds(50));

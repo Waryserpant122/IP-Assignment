@@ -280,7 +280,8 @@ void *serverFunc(void *args)
             this_thread::sleep_for(chrono::microseconds(10));
 
             cout << "\nAt server " << server->serverId << " recieved a DHCP " << req << " request\n\n";
-            cout << "DHCPOFFER sent by server " << server->serverId << " \nmessage type " << replyOffer->opt->messageType << "\n\n";
+            cout << "DHCPOFFER sent by server " << server->serverId << endl;
+            this_thread::sleep_for(chrono::microseconds(20));
             printDHCPMessage(replyOffer);
             this_thread::sleep_for(chrono::microseconds(10));
             for (int i = 0; i < clientsList.size(); i++)
