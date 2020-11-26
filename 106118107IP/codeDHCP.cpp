@@ -211,8 +211,9 @@ void dhcpCliAckSequence(clientNode *client, int recvServer)
     client->leaseTimeLeft = message1->opt->ipLeaseTime;
     client->leaseTimeProvided = message1->opt->ipLeaseTime;
     client->needsIpAddress = 0;
+    cout << "\n\n\n----------------------------------------------------------------------------------\n\n\n";
+    this_thread::sleep_for(chrono::milliseconds(1));
 
-    this_thread::sleep_for(chrono::milliseconds(100));
     cout << endl;
     if (clientsList[4]->needsIpAddress == 1)
     {
@@ -308,8 +309,7 @@ void *serverFunc(void *args)
               cout << "Server " << server->serverId << " with Ip addresss " << addTemp->ipAddress;
               cout << " and Lease Time " << addTemp->leaseTime << " hours\n\n";
               free(addTemp);
-              this_thread::sleep_for(chrono::microseconds(200));
-              cout << "\n\n----------------------------------------------------------\n\n";
+              this_thread::sleep_for(chrono::microseconds(300));
             }
             // else if (message1->opt->messageType == "DHCPDECLINE")
             // {
@@ -326,9 +326,9 @@ void *serverFunc(void *args)
           //do renewal of ip address
           this_thread::sleep_for(chrono::microseconds(100));
           DHCPMessage *message1 = copyMessage(recvMesstemp);
-          cout << "\nDHCP Request given to " << server->nodeName;
+          cout << "\n\nDHCP Request given to Server " << server->serverId;
           cout << " by Client " << message1->opt->clientId;
-          cout << " for renewal \nSending ACK from Server " << server->serverId << " to the client ";
+          cout << " for renewal \n\n\nSending ACK from Server " << server->serverId << " to the client ";
           cout << message1->opt->clientId << " \n";
           cout << "WIth Ip-address of " << message1->opt->resquestedIpAddress << endl;
           ackMessage = copyMessage(message1);
@@ -351,7 +351,7 @@ void *serverFunc(void *args)
         }
         else
         {
-          // Client not present in server book
+          //Client not present in server book
           //print that
           if (server->serverId == 3)
             this_thread::sleep_for(chrono::microseconds(5));
@@ -448,7 +448,8 @@ void *clientFunc(void *args)
 
         cout << "\nClient " << client->clientId << " needs renewal of ip address as ";
         cout << "lease time left:- " << client->leaseTimeLeft;
-        cout << " is 1/2 times as against lease time provided by server " << client->leaseTimeProvided;
+        cout << " is 1/2 times as against lease time provided by server. \n"
+             << client->leaseTimeProvided;
         cout << " \nDHCP MESSAGE OF REQUEST sent by Client " << client->clientId << endl;
 
         printDHCPMessage(sendRequest);
@@ -465,9 +466,9 @@ void *clientFunc(void *args)
         message1 = copyMessage(messageAck);
         if (message1->opt->messageType == "DHCPACK" && message1->opt->clientId == client->clientId)
         {
-          cout << "\n\nACK RECIEVED from server " << message1->opt->serverId << "\n";
+          cout << "\n\nACK RECIEVED from Server " << message1->opt->serverId << "\n\n\n";
           cout << "Client " << client->clientId << " has been given access to renew its IP Address of ";
-          cout << message1->opt->resquestedIpAddress << " for the time of ";
+          cout << message1->opt->resquestedIpAddress << "\nfor the time of ";
           cout << message1->opt->ipLeaseTime << " hours by the server ";
           cout << message1->opt->serverId << "\n\n";
 
